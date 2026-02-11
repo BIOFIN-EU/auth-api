@@ -1,0 +1,16 @@
+services:
+  auth-api:
+    image: auth-api:1.0.0
+    container_name: auth-api
+    build: .
+    env_file:
+      - .env.dev
+    ports:
+      - "8010:8010"
+    networks:
+      - biofin_network
+    restart: unless-stopped
+
+networks:
+  biofin_network:
+    external: true

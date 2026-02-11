@@ -1,0 +1,19 @@
+services:
+  auth-api:
+    image: auth-api:1.0.0
+    build: ./auth-api
+    env_file:
+      - .env.dev
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    ports:
+      - "8010:8010"
+    networks:
+      - biofin_network
+    restart: unless-stopped
+
+networks:
+  biofin_network:
+    driver: bridge
+
