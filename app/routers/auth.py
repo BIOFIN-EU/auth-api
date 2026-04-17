@@ -82,7 +82,7 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
             permissions.append(perm.name)
 
     access = create_access_token(
-        subject=user.email,
+        subject=str(user.id),
         roles=roles,
         permissions=list(set(permissions)),
     )
@@ -147,7 +147,7 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
             permissions.append(perm.name)
 
     access = create_access_token(
-        subject=user.email,
+        subject=str(user.id),
         roles=roles,
         permissions=list(set(permissions)),
     )
@@ -181,10 +181,10 @@ async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 async def me(
-        creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-        db: AsyncSession = Depends(get_db),
+    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
 ):
-    token = creds.credentials
+    token = _get_bearer_token(creds)
 
     try:
         payload = jwt.decode(
@@ -192,15 +192,14 @@ async def me(
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
-        email = payload.get("sub")
-        if not email:
+        user_id = payload.get("sub")
+        if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     res = await db.execute(
-        select(User).where(User.email == email, User.deleted_at.is_(None))
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
     )
     user = res.scalar_one_or_none()
 
