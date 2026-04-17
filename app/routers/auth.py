@@ -129,7 +129,7 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
     )
     db.add(new_rt)
 
-    # load user email as subject
+    # load user and issue access token with user.id as subject
     user_res = await db.execute(
         select(User).where(User.id == rt.user_id, User.deleted_at.is_(None))
     )
@@ -211,9 +211,9 @@ async def me(
 
 @router.post("/change-password", status_code=204)
 async def change_password(
-        payload: ChangePasswordRequest,
-        creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-        db: AsyncSession = Depends(get_db),
+    payload: ChangePasswordRequest,
+    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
 ):
     token = _get_bearer_token(creds)
 
@@ -223,14 +223,14 @@ async def change_password(
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
-        email = jwt_payload.get("sub")
-        if not email:
+        user_id = jwt_payload.get("sub")
+        if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     res = await db.execute(
-        select(User).where(User.email == email, User.deleted_at.is_(None))
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
     )
     user: Optional[User] = res.scalar_one_or_none()
 
@@ -263,7 +263,6 @@ async def change_password(
 
     now = datetime.now(timezone.utc)
 
-    # Revoke all active refresh tokens for this user so existing sessions are logged out
     refresh_tokens_res = await db.execute(
         select(RefreshToken).where(
             RefreshToken.user_id == user.id,
