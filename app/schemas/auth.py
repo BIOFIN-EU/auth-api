@@ -36,3 +36,7 @@ class PermissionOut(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=8)
+    new_password: str = Field(min_length=8)

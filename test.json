@@ -1,0 +1,43 @@
+{
+  "_id": {
+    "$oid": "65c496ca32aca68743c55612"
+  },
+  "de": {
+  "title": "Fiche d'information sur les Brassica",
+  "subtitle": "",
+  "description": "Ce document est destiné aux cultivateurs de brassicacées et aux agronomes européens afin de les informer sur les technologies et méthodologies intelligentes disponibles pour les solutions de lutte intégrée contre les ravageurs (IPM) dans les systèmes de plein champ. Les technologies SMART IPM sont divisées en quatre types de techniques principales, chacune ayant ses propres sous-sections : Surveillance (surveillance des ravageurs, surveillance des cultures, autres), diagnostic et détection (ELISA, ARN et ADN, détection des troubles mobiles, autres), aide à la décision (avec capteurs, sans capteurs), application (pulvérisateurs, drones pulvérisateurs, désherbeurs mécaniques, techniques UV, système de distribution pour les auxiliaires, autres).",
+  "keywords": [
+    "Brassica",
+    "contrôle",
+    "parasite",
+    "culture",
+    "diagnostics",
+    "aide à la détection",
+    "application",
+    "techniques",
+    "pulvérisateur",
+    "drone",
+    "UV",
+    "IPM"
+  ]
+},
+  "fr": {
+  "title": "Fiche d'information sur les Brassica",
+  "subtitle": "",
+  "description": "Ce document est destiné aux cultivateurs de brassicacées et aux agronomes européens afin de les informer sur les technologies et méthodologies intelligentes disponibles pour les solutions de lutte intégrée contre les ravageurs (IPM) dans les systèmes de plein champ. Les technologies SMART IPM sont divisées en quatre types de techniques principales, chacune ayant ses propres sous-sections : Surveillance (surveillance des ravageurs, surveillance des cultures, autres), diagnostic et détection (ELISA, ARN et ADN, détection des troubles mobiles, autres), aide à la décision (avec capteurs, sans capteurs), application (pulvérisateurs, drones pulvérisateurs, désherbeurs mécaniques, techniques UV, système de distribution pour les auxiliaires, autres).",
+  "keywords": [
+    "Brassica",
+    "contrôle",
+    "parasite",
+    "culture",
+    "diagnostics",
+    "aide à la détection",
+    "application",
+    "techniques",
+    "pulvérisateur",
+    "drone",
+    "UV",
+    "IPM"
+  ]
+}
+}

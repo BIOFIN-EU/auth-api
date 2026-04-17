@@ -20,13 +20,13 @@ from app.db.session import get_db
 from app.deps.client_auth import verify_client
 from app.models.models import RefreshToken, User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
     TokenPair,
     UserOut,
 )
-
 
 router = APIRouter(
     # Gateway/service auth: every /auth endpoint requires these headers
@@ -178,10 +178,11 @@ async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
         await db.commit()
     return None
 
+
 @router.get("/me", response_model=UserOut)
 async def me(
-    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+        creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        db: AsyncSession = Depends(get_db),
 ):
     token = creds.credentials
 
@@ -207,3 +208,74 @@ async def me(
         raise HTTPException(status_code=404, detail="User not found")
 
     return user
+
+
+@router.post("/change-password", status_code=204)
+async def change_password(
+        payload: ChangePasswordRequest,
+        creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        db: AsyncSession = Depends(get_db),
+):
+    token = _get_bearer_token(creds)
+
+    try:
+        jwt_payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        email = jwt_payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    res = await db.execute(
+        select(User).where(User.email == email, User.deleted_at.is_(None))
+    )
+    user: Optional[User] = res.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User inactive")
+
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "Current password is incorrect",
+                "field_errors": {
+                    "current_password": "Current password is incorrect",
+                },
+            },
+        )
+
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "New password must be different",
+                "field_errors": {
+                    "new_password": "New password must be different from current password",
+                },
+            },
+        )
+
+    user.password_hash = hash_password(payload.new_password)
+
+    now = datetime.now(timezone.utc)
+
+    # Revoke all active refresh tokens for this user so existing sessions are logged out
+    refresh_tokens_res = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    refresh_tokens = refresh_tokens_res.scalars().all()
+
+    for rt in refresh_tokens:
+        rt.revoked_at = now
+
+    await db.commit()
+
+    return None
