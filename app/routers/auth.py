@@ -277,3 +277,21 @@ async def change_password(
     await db.commit()
 
     return None
+
+@router.get("/users/by-email")
+async def get_user_by_email(
+    email: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(User).where(User.email == email)
+    )
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": user.id,
+        "email": user.email,
+    }

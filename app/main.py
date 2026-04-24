@@ -3,12 +3,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.routers.endpoints import api_router
-from app.models.models import Client
-from app.core.security import hash_password
-from app.core.settings import settings
 from app.core.db import SessionLocal, init_db
+from app.core.security import hash_password
 from app.core.seed_db import seed_db
+from app.core.settings import settings
+from app.models.models import Client
+from app.routers.endpoints import api_router
 
 
 app = FastAPI(title="Auth Service", version="1.0.0")
@@ -22,30 +22,49 @@ async def on_startup() -> None:
 
     async with SessionLocal() as db:
         await seed_db(db)
-        await seed_gateway_client(db)
+
+        await seed_client(
+            db,
+            name="api-gateway",
+            client_id=settings.GATEWAY_AUTH_CLIENT_ID,
+            client_secret=settings.GATEWAY_AUTH_CLIENT_SECRET,
+        )
+
+        await seed_client(
+            db,
+            name="api-physical",
+            client_id=settings.PHYSICAL_AUTH_CLIENT_ID,
+            client_secret=settings.PHYSICAL_AUTH_CLIENT_SECRET,
+        )
 
 
-async def seed_gateway_client(db: AsyncSession) -> None:
+async def seed_client(
+    db: AsyncSession,
+    *,
+    name: str,
+    client_id: str,
+    client_secret: str,
+) -> None:
     result = await db.execute(
-        select(Client).where(Client.client_id == settings.AUTH_CLIENT_ID)
+        select(Client).where(Client.client_id == client_id)
     )
     existing = result.scalar_one_or_none()
 
     if existing:
-        existing.client_secret_hash = hash_password(settings.AUTH_CLIENT_SECRET)
+        existing.name = name
+        existing.client_secret_hash = hash_password(client_secret)
         existing.is_active = True
-        await db.commit()
-        return
+    else:
+        db.add(
+            Client(
+                name=name,
+                client_id=client_id,
+                client_secret_hash=hash_password(client_secret),
+                is_active=True,
+            )
+        )
 
     try:
-        client = Client(
-            name="api-gateway",
-            client_id=settings.AUTH_CLIENT_ID,
-            client_secret_hash=hash_password(settings.AUTH_CLIENT_SECRET),
-            is_active=True,
-        )
-        db.add(client)
         await db.commit()
-
     except IntegrityError:
         await db.rollback()

@@ -4,14 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.models import Permission, Role
 
 DEFAULT_ROLES = [
-    {
-        "name": "admin",
-        "description": "Administrator role",
-    },
-    {
-        "name": "user",
-        "description": "Standard user role",
-    },
+    {"name": "admin", "description": "Administrator role"},
+    {"name": "user", "description": "Standard user role"},
+
+    {"name": "borrower", "description": "Borrower user type"},
+    {"name": "funder", "description": "Funder user type"},
+    {"name": "intermediary", "description": "Intermediary user type"},
 ]
 
 DEFAULT_PERMISSIONS = [

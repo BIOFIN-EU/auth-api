@@ -16,9 +16,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_HOURS: int = 24
     REFRESH_TOKEN_EXPIRE_HOURS: int = 168
 
-    # CLIENT AUTH (ADD THESE)
-    AUTH_CLIENT_ID: str = "api_gateway"
-    AUTH_CLIENT_SECRET: str
+    GATEWAY_AUTH_CLIENT_ID: str = "api_gateway"
+    GATEWAY_AUTH_CLIENT_SECRET: str
+
+    PHYSICAL_AUTH_CLIENT_ID: str = "api_physical"
+    PHYSICAL_AUTH_CLIENT_SECRET: str
 
     @property
     def database_url(self) -> str:
