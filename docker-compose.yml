@@ -11,6 +11,23 @@ services:
       - biofin_network
     restart: unless-stopped
 
+  auth-db:
+    image: postgres:16
+    container_name: auth-db
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_data:/var/lib/postgresql/data
+    networks:
+      - biofin_network
+
+
+volumes:
+  auth_data:
+
 networks:
   biofin_network:
     external: true

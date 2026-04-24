@@ -12,4 +12,4 @@ COPY . .
 
 EXPOSE 8010
 
-CMD ["gunicorn","-k","uvicorn.workers.UvicornWorker","app.main:app","--bind","0.0.0.0:8010","--workers","2","--timeout","60"]
+CMD ["gunicorn","-k","uvicorn.workers.UvicornWorker","app.main:app","--bind","0.0.0.0:8010","--workers","1","--timeout","60"]
