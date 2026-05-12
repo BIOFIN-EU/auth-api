@@ -27,6 +27,10 @@ from app.schemas.auth import (
     TokenPair,
     UserOut,
 )
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter(
     # Gateway/service auth: every /auth endpoint requires these headers
@@ -283,6 +287,8 @@ async def get_user_by_email(
     email: str,
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info(f"Fetching user by email: {email}")
+
     result = await db.execute(
         select(User).where(User.email == email)
     )
