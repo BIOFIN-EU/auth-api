@@ -282,6 +282,53 @@ async def change_password(
 
     return None
 
+@router.post("/close-account", status_code=204)
+async def close_account(
+    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    token = _get_bearer_token(creds)
+
+    try:
+        jwt_payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        user_id = jwt_payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    res = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user: Optional[User] = res.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User inactive")
+
+    now = datetime.now(timezone.utc)
+    user.is_active = False
+    user.deleted_at = now
+
+    refresh_tokens_res = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    refresh_tokens = refresh_tokens_res.scalars().all()
+
+    for rt in refresh_tokens:
+        rt.revoked_at = now
+
+    await db.commit()
+
+    return None
+
+
 @router.get("/users/by-email")
 async def get_user_by_email(
     email: str,
