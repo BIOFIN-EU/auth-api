@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.db.session import get_db
 from app.models.models import User, Role, Permission, UserRole, RolePermission
 from app.schemas.rbac import CreateRole, CreatePermission, AssignRole, AssignPermissionToRole
-from app.schemas.auth import RoleOut, PermissionOut
+from app.schemas.auth import RoleOut, PermissionOut, normalise_email
 from app.services.rbac_service import require_permission
 
 
@@ -40,7 +40,7 @@ async def create_permission(payload: CreatePermission, db: AsyncSession = Depend
 
 @router.post("/users/{user_email}/roles", status_code=204, dependencies=[Depends(require_permission("users:write"))])
 async def assign_role(user_email: str, payload: AssignRole, db: AsyncSession = Depends(get_db)):
-    user_res = await db.execute(select(User).where(User.email == user_email, User.deleted_at.is_(None)))
+    user_res = await db.execute(select(User).where(User.email == normalise_email(user_email), User.deleted_at.is_(None)))
     user = user_res.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

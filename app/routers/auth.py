@@ -25,8 +25,13 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     TokenPair,
+    UpdateMeRequest,
+    UserLookupRequest,
     UserOut,
+    UserSummary,
+    normalise_email,
 )
+from app.services.user_roles import DEFAULT_ROLE, grant_role, token_claims
 import logging
 
 logger = logging.getLogger(__name__)
@@ -48,17 +53,34 @@ def _get_bearer_token(creds: HTTPAuthorizationCredentials) -> str:
     return creds.credentials
 
 
+async def _current_user_or_401(creds: HTTPAuthorizationCredentials, db: AsyncSession) -> User:
+    """The open account the access token is for."""
+    try:
+        payload = jwt.decode(_get_bearer_token(creds), settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = payload.get("sub")
+    user = await db.scalar(select(User).where(User.id == user_id, User.deleted_at.is_(None))) if user_id else None
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="User inactive")
+    return user
+
+
 @router.post("/register", response_model=UserOut, status_code=201)
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    # ensure unique email among non-deleted users
-    res = await db.execute(
-        select(User).where(User.email == payload.email, User.deleted_at.is_(None))
-    )
+    # Emails are unique across all accounts, closed ones included.
+    res = await db.execute(select(User).where(User.email == payload.email))
     if res.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    user = User(email=payload.email, password_hash=hash_password(payload.password))
+    user = User(
+        email=payload.email,
+        display_name=payload.display_name,
+        password_hash=hash_password(payload.password),
+    )
     db.add(user)
+    await db.flush()
+    await grant_role(db, user, DEFAULT_ROLE)
     await db.commit()
     await db.refresh(user)
     return user
@@ -74,22 +96,8 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not user or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    # collect roles
-    roles = [role.name for role in user.roles if role.deleted_at is None]
-
-    # collect permissions
-    permissions = []
-    for role in user.roles:
-        if role.deleted_at is not None:
-            continue
-        for perm in role.permissions:
-            permissions.append(perm.name)
-
-    access = create_access_token(
-        subject=str(user.id),
-        roles=roles,
-        permissions=list(set(permissions)),
-    )
+    roles, permissions = token_claims(user)
+    access = create_access_token(subject=str(user.id), roles=roles, permissions=permissions)
 
     refresh_plain = create_refresh_token()
     rt = RefreshToken(
@@ -142,20 +150,8 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User inactive")
 
-    roles = [role.name for role in user.roles if role.deleted_at is None]
-
-    permissions = []
-    for role in user.roles:
-        if role.deleted_at is not None:
-            continue
-        for perm in role.permissions:
-            permissions.append(perm.name)
-
-    access = create_access_token(
-        subject=str(user.id),
-        roles=roles,
-        permissions=list(set(permissions)),
-    )
+    roles, permissions = token_claims(user)
+    access = create_access_token(subject=str(user.id), roles=roles, permissions=permissions)
 
     await db.commit()
 
@@ -212,6 +208,21 @@ async def me(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    return user
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_me(
+    payload: UpdateMeRequest,
+    creds: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """The user's own details: their display name (blank removes it)."""
+    user = await _current_user_or_401(creds, db)
+    if "display_name" in payload.model_fields_set:
+        user.display_name = payload.display_name
+    await db.commit()
+    await db.refresh(user)
     return user
 
 
@@ -331,23 +342,43 @@ async def close_account(
     return None
 
 
-@router.get("/users/by-email")
+async def require_physical_client(client: Client = Security(verify_client)) -> Client:
+    """
+    For physical-api only. The gateway forwards users' requests with its own
+    client credentials, so its client must not be enough: anyone could look
+    up who has an account.
+    """
+    if client.client_id != settings.PHYSICAL_AUTH_CLIENT_ID:
+        raise HTTPException(status_code=403, detail="Not available to this client")
+    return client
+
+
+@router.post("/users/lookup", response_model=list[UserSummary], dependencies=[Depends(require_physical_client)])
+async def lookup_users(payload: UserLookupRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Email and display name of each of these users (physical-api showing a
+    project's members). Closed accounts and unknown ids are left out.
+    """
+    if not payload.ids:
+        return []
+    result = await db.execute(
+        select(User).where(User.id.in_(payload.ids), User.deleted_at.is_(None), User.is_active.is_(True))
+    )
+    return [UserSummary(id=u.id, email=u.email, display_name=u.display_name) for u in result.scalars()]
+
+
+@router.get("/users/by-email", dependencies=[Depends(require_physical_client)])
 async def get_user_by_email(
     email: str,
     db: AsyncSession = Depends(get_db),
-    client: Client = Security(verify_client),
 ):
-    # For physical-api only (adding project members). The gateway forwards
-    # users' requests with its own client credentials, so its client must
-    # not be enough: anyone could look up who has an account.
-    if client.client_id != settings.PHYSICAL_AUTH_CLIENT_ID:
-        raise HTTPException(status_code=403, detail="Not available to this client")
-
+    """physical-api adding a project member. Closed accounts can't be added."""
     logger.info("Fetching user by email")
 
-    # Closed accounts can't be added to projects.
     result = await db.execute(
-        select(User).where(User.email == email, User.deleted_at.is_(None), User.is_active.is_(True))
+        select(User).where(
+            User.email == normalise_email(email), User.deleted_at.is_(None), User.is_active.is_(True)
+        )
     )
     user = result.scalar_one_or_none()
 
