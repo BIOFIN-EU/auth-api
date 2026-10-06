@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,9 +9,6 @@ DEFAULT_ROLES = [
     {"name": "admin", "description": "Administrator role"},
     {"name": "user", "description": "Standard user role"},
 
-    {"name": "borrower", "description": "Borrower user type"},
-    {"name": "funder", "description": "Funder user type"},
-    {"name": "intermediary", "description": "Intermediary user type"},
 ]
 
 DEFAULT_PERMISSIONS = [
@@ -40,10 +39,36 @@ DEFAULT_PERMISSIONS = [
 ]
 
 
+# Roles that used to be seeded here but describe someone's part in a
+# project, which physical-api records per project: retired (deleted_at).
+RETIRED_ROLES = ("borrower", "funder", "intermediary")
+
+
 async def seed_db(session: AsyncSession) -> None:
     await seed_roles(session)
     await seed_permissions(session)
+    await session.flush()
+    await retire_roles(session)
+    await grant_admin_every_permission(session)
     await session.commit()
+
+
+async def retire_roles(session: AsyncSession) -> None:
+    roles = (await session.execute(
+        select(Role).where(Role.name.in_(RETIRED_ROLES), Role.deleted_at.is_(None))
+    )).scalars().all()
+    for role in roles:
+        role.deleted_at = datetime.now(timezone.utc)
+
+
+async def grant_admin_every_permission(session: AsyncSession) -> None:
+    admin = (await session.execute(select(Role).where(Role.name == "admin"))).scalar_one_or_none()
+    if admin is None:
+        return
+    held = {permission.name for permission in admin.permissions}
+    for permission in (await session.execute(select(Permission))).scalars().all():
+        if permission.name not in held:
+            admin.permissions.append(permission)
 
 
 async def seed_roles(session: AsyncSession) -> None:

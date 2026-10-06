@@ -40,3 +40,29 @@ docker compose -f docker-compose.prod.yml up -d --build
 - Access token expiry: 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`); clients renew it with the refresh token
 - Refresh token expiry: 24h (configurable via `REFRESH_TOKEN_EXPIRE_HOURS`)
 - Refresh tokens are **stored hashed** in DB and rotated on refresh.
+
+## Database migrations
+The app creates missing tables on startup; changes to existing tables are
+Alembic migrations (`alembic/versions`). Run them before starting new code:
+
+```bash
+docker compose run --rm auth-api alembic upgrade head
+```
+
+## Platform roles
+Every account has `user` (given at signup). `admin` is given from the
+command line, e.g. on the server:
+
+```bash
+docker compose exec auth-api python -m app.cli grant-role you@example.com admin
+docker compose exec auth-api python -m app.cli revoke-role you@example.com admin
+docker compose exec auth-api python -m app.cli show-roles you@example.com
+```
+
+Roles are copied into the access token, so a change applies from the
+user's next token renewal (within `ACCESS_TOKEN_EXPIRE_MINUTES`) or login.
+Someone's part in a project (borrower, funder, landowner, ...) is not a
+platform role: physical-api records it per project.
+
+## Tests
+Against throwaway databases only (see `tests/conftest.py` for the commands).

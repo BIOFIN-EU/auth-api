@@ -25,7 +25,10 @@ class User(Base):
         primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
+    # Always lower case (see app.schemas.auth.normalise_email).
     email: Mapped[str] = mapped_column(Text, unique=True, nullable=False, index=True)
+    # How other people see this user (e.g. on a project's member list).
+    display_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     is_superuser: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
