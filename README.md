@@ -37,6 +37,6 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 ## Notes
-- Access token expiry: 24h (configurable via `ACCESS_TOKEN_EXPIRE_HOURS`)
+- Access token expiry: 30 minutes (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`); clients renew it with the refresh token
 - Refresh token expiry: 24h (configurable via `REFRESH_TOKEN_EXPIRE_HOURS`)
 - Refresh tokens are **stored hashed** in DB and rotated on refresh.

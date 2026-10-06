@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
 
     # TOKENS
-    ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+    # Short, so a closed account or changed password stops working soon: the
+    # frontend renews the token with the refresh token (revoked on closing,
+    # password change and logout).
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_HOURS: int = 168
 
     GATEWAY_AUTH_CLIENT_ID: str = "api_gateway"
