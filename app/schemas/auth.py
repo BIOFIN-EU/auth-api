@@ -14,7 +14,9 @@ class TokenPair(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    expires_in_hours: int
+    expires_in_minutes: int
+    # Kept for older clients.
+    expires_in_hours: float
 
 class RefreshRequest(BaseModel):
     refresh_token: str

@@ -18,7 +18,7 @@ from app.core.security import (
 from app.core.settings import settings
 from app.db.session import get_db
 from app.deps.client_auth import verify_client
-from app.models.models import RefreshToken, User
+from app.models.models import Client, RefreshToken, User
 from app.schemas.auth import (
     ChangePasswordRequest,
     LoginRequest,
@@ -103,7 +103,8 @@ async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     return TokenPair(
         access_token=access,
         refresh_token=refresh_plain,
-        expires_in_hours=settings.ACCESS_TOKEN_EXPIRE_HOURS,
+        expires_in_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        expires_in_hours=settings.ACCESS_TOKEN_EXPIRE_MINUTES / 60,
     )
 
 
@@ -161,7 +162,8 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
     return TokenPair(
         access_token=access,
         refresh_token=refresh_plain,
-        expires_in_hours=settings.ACCESS_TOKEN_EXPIRE_HOURS,
+        expires_in_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES,
+        expires_in_hours=settings.ACCESS_TOKEN_EXPIRE_MINUTES / 60,
     )
 
 
@@ -333,11 +335,19 @@ async def close_account(
 async def get_user_by_email(
     email: str,
     db: AsyncSession = Depends(get_db),
+    client: Client = Security(verify_client),
 ):
-    logger.info(f"Fetching user by email: {email}")
+    # For physical-api only (adding project members). The gateway forwards
+    # users' requests with its own client credentials, so its client must
+    # not be enough: anyone could look up who has an account.
+    if client.client_id != settings.PHYSICAL_AUTH_CLIENT_ID:
+        raise HTTPException(status_code=403, detail="Not available to this client")
 
+    logger.info("Fetching user by email")
+
+    # Closed accounts can't be added to projects.
     result = await db.execute(
-        select(User).where(User.email == email)
+        select(User).where(User.email == email, User.deleted_at.is_(None), User.is_active.is_(True))
     )
     user = result.scalar_one_or_none()
 
